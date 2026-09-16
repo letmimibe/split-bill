@@ -52,7 +52,7 @@ export async function onRequest({request,env}){
  else if(message.includes('image')||message.includes('mime'))error='IMAGE_CONFIG';
  else if(message.includes('billing'))error='BILLING_CONFIG';
  }
- return reply({error},result.status===429?429:502);
+ return reply({error, detail},result.status===429?429:502);
  }
  const data=await result.json(),candidate=data.candidates?.[0];if(candidate?.finishReason!=='STOP')return reply({error:'INVALID_RESULT'},422);
  const text=candidate.content?.parts?.filter(p=>!p.thought&&typeof p.text==='string').map(p=>p.text).join('');
