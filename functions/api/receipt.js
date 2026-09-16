@@ -31,7 +31,15 @@ export async function onRequest({request,env}){
  const model=body.mode==='careful'?'gemini-3.8-flash':'gemini-3.5-flash-lite';
  try{
  const result=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},signal:AbortSignal.timeout(55000),body:JSON.stringify({systemInstruction:{parts:[{text:prompt}]},contents:[{role:'user',parts:[{text:'Read the purchased items and original bill amounts from this receipt.'},{inlineData:{mimeType:body.mimeType,data:body.data}}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,maxOutputTokens:8192}})});
- if(!result.ok)return reply({error:result.status===429?'QUOTA':'UPSTREAM'},result.status===429?429:502);
+ if(!result.ok){
+ let error='UPSTREAM';let detail;try{detail=await result.json()}catch{}
+ const message=String(detail?.error?.message||'').toLowerCase();
+ if(result.status===429)error='QUOTA';
+ else if(result.status===404)error='MODEL_UNAVAILABLE';
+ else if(result.status===401||result.status===403||message.includes('api key'))error='AUTH';
+ else if(result.status===400)error=message.includes('location')||message.includes('country')?'REGION':'INVALID_CONFIG';
+ return reply({error},result.status===429?429:502);
+ }
  const data=await result.json(),candidate=data.candidates?.[0];if(candidate?.finishReason!=='STOP')return reply({error:'INVALID_RESULT'},422);
  const text=candidate.content?.parts?.filter(p=>!p.thought&&typeof p.text==='string').map(p=>p.text).join('');
  let receipt;try{receipt=normalise(JSON.parse(text))}catch{return reply({error:'INVALID_RESULT'},422)}
