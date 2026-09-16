@@ -8,7 +8,7 @@ assert.equal((await onRequest({request:req(),env:{}})).status,503);
 assert.equal((await onRequest({request:req(image,'https://other.test'),env})).status,403);
 assert.equal((await onRequest({request:req({...image,data:'AAAAAAAAAAAAAAAA'}),env})).status,400);
 const receipt={currency:'CHF',items:[{name:'2 Latte',price:9},{name:'Kola',price:5},{name:'Schnitzel',price:22},{name:'Spatzli',price:18.5}],tax:0,service:0,discount:0,total:54.5,needsReview:false};
-let model;globalThis.fetch=async(url,opts)=>{model=url;assert.equal(opts.headers['x-goog-api-key'],'test-secret-only');assert.ok(JSON.parse(opts.body).generationConfig.responseJsonSchema);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(receipt)}]}}]})};
+let model;globalThis.fetch=async(url,opts)=>{model=url;assert.equal(opts.headers['x-goog-api-key'],'test-secret-only');assert.ok(JSON.parse(opts.body).generationConfig.responseSchema);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(receipt)}]}}]})};
 let response=await onRequest({request:req(),env});assert.equal(response.status,200);assert.deepEqual((await response.json()).receipt,receipt);assert.ok(model.includes('gemini-3.5-flash-lite'));
 await onRequest({request:req({...image,mode:'careful'}),env});assert.ok(model.includes('gemini-3.8-flash'));
 receipt.items[0].price=null;response=await onRequest({request:req(),env});assert.equal((await response.json()).receipt.needsReview,true);
