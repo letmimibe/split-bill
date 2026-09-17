@@ -12,12 +12,14 @@ const shareWaBtn = $('#share-wa');
 const labels = {
   en: {
     saveImage: 'Save as image',
+    saveImageIOS: 'Save to Photos',
     savePdf: 'Save as PDF',
     shareWa: 'Share to WhatsApp',
     footerCredit: 'Created with care by',
     learnMore: 'Learn more',
     privacy: "Patungan doesn't save your receipt. The image is sent to Google Gemini only to read the bill. Google processes it under the Gemini API terms.",
     imageSaved: 'Image downloaded. Ready to share.',
+    saveToPhotos: 'Choose “Save Image” in the iPhone share sheet to add it to Photos.',
     pdfSaved: 'PDF downloaded.',
     shared: 'Share sheet opened.',
     shareFallback: 'WhatsApp Web opened with the text. The image has been downloaded for you to attach.',
@@ -32,12 +34,14 @@ const labels = {
   },
   id: {
     saveImage: 'Simpan sebagai gambar',
+    saveImageIOS: 'Simpan ke Photos',
     savePdf: 'Simpan sebagai PDF',
     shareWa: 'Bagikan ke WhatsApp',
-    footerCredit: 'Dibuat dengan care oleh',
+    footerCredit: 'Dibuat sambil makan dubai chewy cookie oleh',
     learnMore: 'Pelajari selengkapnya',
     privacy: 'Patungan tidak menyimpan foto strukmu. Gambar dikirim ke Google Gemini hanya untuk membaca tagihan. Pemrosesan oleh Google mengikuti ketentuan Gemini API.',
     imageSaved: 'Gambar berhasil diunduh. Tinggal dibagikan.',
+    saveToPhotos: 'Pilih “Save Image” di share sheet iPhone supaya hasilnya masuk ke Photos.',
     pdfSaved: 'PDF berhasil diunduh.',
     shared: 'Lembar berbagi sudah dibuka.',
     shareFallback: 'WhatsApp Web dibuka dengan teks ringkasannya. Gambar juga sudah diunduh untuk kamu lampirkan.',
@@ -55,6 +59,7 @@ const labels = {
 function lang(){ return document.documentElement.lang === 'id' ? 'id' : 'en'; }
 function t(key, ...args){ const value = labels[lang()][key]; return typeof value === 'function' ? value(...args) : value; }
 function setStatus(key){ if(copyStatus) copyStatus.textContent = key ? t(key) : ''; }
+function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
 
 function personNameFromResult(el){
   const name = el.querySelector('.result-name');
@@ -120,7 +125,7 @@ function refreshDetails(){
 }
 
 function applyLabels(){
-  if(saveImageBtn) saveImageBtn.textContent = t('saveImage');
+  if(saveImageBtn) saveImageBtn.textContent = t(isIOS() ? 'saveImageIOS' : 'saveImage');
   if(savePdfBtn) savePdfBtn.textContent = t('savePdf');
   if(shareWaBtn) shareWaBtn.textContent = t('shareWa');
   if(footerCredit) footerCredit.textContent = t('footerCredit');
@@ -147,8 +152,9 @@ function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x
 function canvasToBlob(canvas){ return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('export')), 'image/png')); }
 function blobToDataUrl(blob){ return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(Error('export')); reader.readAsDataURL(blob); }); }
 function downloadBlob(blob, name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1200); }
+function dataUrlToFile(dataUrl, name){ const [meta,data]=dataUrl.split(','); const mime=meta.match(/data:([^;]+)/)?.[1] || 'image/png'; const bytes=atob(data); const buffer=new Uint8Array(bytes.length); for(let i=0;i<bytes.length;i++)buffer[i]=bytes.charCodeAt(i); return new File([buffer],name,{type:mime}); }
 
-async function buildImage(){
+function buildCanvas(){
   const state = refreshDetails();
   if(!state.shares.length) throw Error('export');
   const width=1200, outerPad=40, cardPad=68, cardWidth=width-outerPad*2, contentWidth=cardWidth-cardPad*2;
@@ -171,8 +177,10 @@ async function buildImage(){
   roundRect(draw,outerPad,outerPad,cardWidth,height-outerPad*2,28); draw.fillStyle='#fffcf7'; draw.fill(); draw.strokeStyle='#d9cbb7'; draw.lineWidth=2; draw.stroke();
   let y=outerPad+cardPad;
   for(const p of measured){ draw.font=p.font; draw.fillStyle=p.color; for(const line of p.lines){ draw.fillText(line,outerPad+cardPad,y); y+=p.lineHeight; } y+=p.gap; }
-  return { blob: await canvasToBlob(canvas), state };
+  return {canvas,state};
 }
+
+async function buildImage(){ const {canvas,state}=buildCanvas(); return {blob:await canvasToBlob(canvas),state}; }
 
 function buildText(state){
   return ['PATUNGAN','',`${t('total')}: ${state.total}`,`${t('subtotal')}: ${state.subtotal}`,`${t('extras')}: ${state.extras}`,`${t('discount')}: ${state.discount}`,'',...state.shares.map(row=>`${row.name}: ${row.amount} — ${detailText(row.items)}`)].join('\n');
@@ -192,7 +200,20 @@ function loadJsPdf(){
   return pdfLoader;
 }
 
-async function saveImage(){ try{ const {blob}=await buildImage(); downloadBlob(blob, `patungan-${Date.now()}.png`); setStatus('imageSaved'); } catch { setStatus('exportFailed'); } }
+function saveImage(){
+  try{
+    if(isIOS()){
+      const {canvas}=buildCanvas();
+      const file=dataUrlToFile(canvas.toDataURL('image/png'),`patungan-${Date.now()}.png`);
+      if(navigator.share && navigator.canShare?.({files:[file]})){
+        setStatus('saveToPhotos');
+        navigator.share({files:[file],title:'Patungan'}).catch(e=>{if(e?.name!=='AbortError')setStatus('exportFailed');});
+        return;
+      }
+    }
+    buildImage().then(({blob})=>{downloadBlob(blob,`patungan-${Date.now()}.png`);setStatus('imageSaved');}).catch(()=>setStatus('exportFailed'));
+  }catch{setStatus('exportFailed');}
+}
 async function savePdf(){ try{ const {blob}=await buildImage(); const jsPDF=await loadJsPdf(); const dataUrl=await blobToDataUrl(blob); const pdf=new jsPDF({orientation:'portrait',unit:'pt',format:'a4'}); const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight(), props=pdf.getImageProperties(dataUrl), ratio=Math.min((pageW-56)/props.width,(pageH-56)/props.height), drawW=props.width*ratio, drawH=props.height*ratio; pdf.addImage(dataUrl,'PNG',(pageW-drawW)/2,28,drawW,drawH); pdf.save(`patungan-${Date.now()}.pdf`); setStatus('pdfSaved'); } catch { setStatus('exportFailed'); } }
 async function shareWhatsApp(){ try{ const {blob,state}=await buildImage(); const file=new File([blob],`patungan-${Date.now()}.png`,{type:'image/png'}); const text=buildText(state); if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({title:'Patungan', text, files:[file]}); setStatus('shared'); return; } downloadBlob(blob, `patungan-${Date.now()}.png`); window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener'); setStatus('shareFallback'); } catch(e){ if(e?.name==='AbortError') return; setStatus('shareNotSupported'); } }
 
