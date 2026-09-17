@@ -1,6 +1,6 @@
 // Cloudflare Pages Function. The API key is a server-side secret, never sent to the browser.
 const MAX_BODY=8_100_000;
-const moneySchema={type:['number','null'],minimum:0,maximum:1000000000};
+const moneySchema={type:['number','null']};
 const schema={type:'object',properties:{currency:{type:['string','null']},items:{type:'array',maxItems:150,items:{type:'object',properties:{name:{type:'string'},price:moneySchema},required:['name','price']}},tax:moneySchema,service:moneySchema,discount:moneySchema,total:moneySchema,needsReview:{type:'boolean'}},required:['currency','items','tax','service','discount','total','needsReview']};
 function apiSchema(value){
  const result={...value};
