@@ -8,7 +8,7 @@ assert.equal((await onRequest({request:req(),env:{}})).status,503);
 assert.equal((await onRequest({request:req(image,'https://other.test'),env})).status,403);
 assert.equal((await onRequest({request:req({...image,data:'AAAAAAAAAAAAAAAA'}),env})).status,400);
 const receipt={currency:'CHF',items:[{name:'2 Latte',price:9},{name:'Kola',price:5},{name:'Schnitzel',price:22},{name:'Spatzli',price:18.5}],tax:0,service:0,discount:0,total:54.5,needsReview:false};
-let model;globalThis.fetch=async(url,opts)=>{model=url;assert.equal(opts.headers['x-goog-api-key'],'test-secret-only');assert.ok(JSON.parse(opts.body).generationConfig.responseSchema);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(receipt)}]}}]})};
+let model;globalThis.fetch=async(url,opts)=>{model=url;assert.equal(opts.headers['x-goog-api-key'],'test-secret-only');const body=JSON.parse(opts.body);const format=body.generationConfig.responseFormat;assert.equal(format.text.mimeType,'application/json');assert.equal(format.text.schema.type,'object');assert.equal(format.text.schema.properties.tax.minimum,0);assert.equal(body.generationConfig.responseSchema,undefined);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(receipt)}]}}]})};
 let response=await onRequest({request:req(),env});assert.equal(response.status,200);assert.deepEqual((await response.json()).receipt,receipt);assert.ok(model.includes('gemini-3.5-flash-lite'));
 await onRequest({request:req({...image,mode:'careful'}),env});assert.ok(model.includes('gemini-3.8-flash'));
 receipt.items[0].price=null;response=await onRequest({request:req(),env});assert.equal((await response.json()).receipt.needsReview,true);
@@ -16,4 +16,4 @@ receipt.items[0].price=-1;assert.equal((await onRequest({request:req(),env})).st
 globalThis.fetch=async()=>new Response('{}',{status:429});assert.equal((await onRequest({request:req(),env})).status,429);
 globalThis.fetch=async()=>{throw Error('test-secret-only')};response=await onRequest({request:req(),env});assert.ok(!(await response.text()).includes('test-secret-only'));
 const p=[{id:'a'},{id:'b'},{id:'c'}];const c=calculate(p,[{name:'Shared bill',price:5450,owners:['a','b','c']}],0,0,0);assert.deepEqual(c.shares,[1817,1817,1816]);assert.equal(c.shares.reduce((a,b)=>a+b,0),5450);
-console.log('PASS: request validation, secret isolation, model selection, schema validation, null prices, provider errors, cent rounding.');
+console.log('PASS: request validation, secret isolation, model selection, current responseFormat schema, null prices, provider errors, cent rounding.');
