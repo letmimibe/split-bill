@@ -38,7 +38,7 @@ export async function onRequest({request,env}){
  if(!valid)return reply({error:'BAD_REQUEST'},400);
  const model=body.mode==='careful'?'gemini-3.8-flash':'gemini-3.5-flash-lite';
  try{
- const result=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},signal:AbortSignal.timeout(55000),body:JSON.stringify({systemInstruction:{parts:[{text:prompt}]},contents:[{role:'user',parts:[{text:'Read the purchased items and original bill amounts from this receipt.'},{inlineData:{mimeType:body.mimeType,data:body.data}}]}],generationConfig:{responseMimeType:'application/json',responseSchema:apiSchema(schema),maxOutputTokens:8192}})});
+ const result=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},signal:AbortSignal.timeout(55000),body:JSON.stringify({systemInstruction:{parts:[{text:prompt}]},contents:[{role:'user',parts:[{text:'Read the purchased items and original bill amounts from this receipt.'},{inlineData:{mimeType:body.mimeType,data:body.data}}]}],generationConfig:{maxOutputTokens:8192}})});
  if(!result.ok){
  let error='UPSTREAM';let detail;try{detail=await result.json()}catch{}
  const message=String(detail?.error?.message||'').toLowerCase();
